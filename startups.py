@@ -7,7 +7,7 @@ import logging
 import random
 
 
-class Entreprise(enum.Enum):
+class Entreprise(enum.IntEnum):
 
     giraffe_beer = 5
     bowwow_games = 6
@@ -64,8 +64,9 @@ class Action:
 
 class Joueur:
 
-    def __init__(self, nom):
+    def __init__(self, nom, identifiant):
         self._nom = nom
+        self._id = identifiant
         self.main = list()
         self.actions = collections.Counter()
 
@@ -79,6 +80,12 @@ class Joueur:
     def nom(self):
         """Identifiant du joueur"""
         return self._nom
+
+    @property
+    def id(self):
+        """Identifiant numérique (ordre du tour)
+        """
+        return self._id
 
     def initier_manche(self, main, pioche, marché):
         self.main = main
@@ -96,7 +103,7 @@ class Joueur:
         return retour
 
     def devient_majoritaire(self, entreprise):
-        logging.info("{} devient majoritaire sur {}".format(
+        logging.info("{} devient majoritaire sur {!r}".format(
             self.nom, entreprise.name))
         self.majorités.add(entreprise)
 
@@ -115,7 +122,15 @@ class Joueur:
         return retour
 
     def afficher_main(self):
-        retour = " / ".join([str(a.entreprise) for a in self.main])
+        retour = " / ".join([str(a.entreprise.name) for a in self.main])
+        return retour
+
+    def afficher_marché(self):
+        lignes = list()
+        for i, a in enumerate(self.marché):
+            lignes.append("{}) {} et {}€".format(
+                i, a.entreprise.name, a.valeur))
+        retour = "\n".join(lignes)
         return retour
 
     def _augmenter_portefeuille(self, action):
@@ -124,15 +139,15 @@ class Joueur:
         Peut-être même deviendra-t-on majoritaire… mais je ne peux pas le
         décider seul.
         """
-        logging.info("{} ajoute une action {} à son portefeuille".format(
-            self.nom, action.entreprise))
+        logging.info("{} ajoute une action {!r} à son portefeuille".format(
+            self.nom, action.entreprise.name))
         self.actions.update([action.entreprise])
 
     def _mettre_au_marché(self, action):
         """Reverser une action au marché
         """
-        logging.info("{} reverse une action {} au marché".format(
-            self.nom, action.entreprise))
+        logging.info("{} reverse une action {!r} au marché".format(
+            self.nom, action.entreprise.name))
         self.marché.append(action)
 
     def _marché_réel(self):
@@ -153,7 +168,80 @@ class Joueur:
 
 
 class Humain(Joueur):
-    pass
+
+    def jouer(self):
+        logging.info("Vous avez {}€".format(self.richesse))
+
+        # Affichage du marché
+        self.marché.sort(key=lambda a: (a.entreprise, -a.valeur))
+        logging.info("Marché :\n" + self.afficher_marché())
+
+        logging.info(self.afficher_main())
+
+        # Choix de l'action
+        marché = self._marché_réel()
+        peut_piocher = (self.richesse >= len(marché))
+        peut_prendre = (len(marché) > 0)
+
+        piocher = False
+        if peut_piocher and peut_prendre:
+            while True:
+                x = input("Que voulez vous faire ? 1) Piocher 2) Prendre ")
+                if x.isdigit() and int(x) in [1, 2]:
+                    piocher = (int(x) == 1)
+                    break
+        elif peut_piocher:
+            piocher = True
+
+        action = None
+        if piocher:
+            for a in marché:
+                a.rétribuer()
+            self.richesse -= len(marché)
+            action = self._piocher()
+        else:
+            while True:
+                x = input("Quelle carte ? ")
+                if x.isdigit():
+                    x = int(x)
+                    if 0 <= x < len(self.marché) and self.marché[x] in marché:
+                        action = self.marché[x]
+                        del self.marché[x]
+                        if action.valeur > 0:
+                            logging.info(
+                                "Vous récupérez {}€".format(action.valeur))
+                        self.richesse += action.valeur
+                        action.purger_dividendes()
+                        break
+        logging.info(
+            "Vous récupérez une action {!r}".format(action.entreprise.name))
+        self.main.append(action)
+        self.main.sort(key=lambda a: a.entreprise)
+
+        # Choix du jeu
+        logging.info(self.afficher_main())
+
+        vendre = False
+        while True:
+            x = input(
+                "Que voulez-vous faire ? 1) Intégrer au portefeuille 2) Revendre ")
+            if x.isdigit() and int(x) in [1, 2]:
+                vendre = (int(x) == 2)
+                break
+        while True:
+            x = input("Quelle carte ? ")
+            if x.isdigit():
+                x = int(x)
+                if (0 <= x < len(self.main) and
+                        not (vendre and not piocher and self.main[x] is action)):
+                    action = self.main[x]
+                    del self.main[x]
+                    break
+
+        if vendre:
+            self.marché.append(action)
+        else:
+            self.actions.update([action.entreprise])
 
 
 class Robot(Joueur):
@@ -184,8 +272,8 @@ class Robot(Joueur):
         else:
             # On prend une carte au marché
             action = random.sample(marché, 1)[0]
-            logging.info("{} récupère une action {} au marché".format(
-                self.nom, action.entreprise))
+            logging.info("{} récupère une action {!r} au marché".format(
+                self.nom, action.entreprise.name))
             self.marché.remove(action)
             self.richesse += action.valeur
             action.purger_dividendes()
@@ -266,6 +354,7 @@ def afficher_portefeuilles(joueurs):
 
 def jouer_manche(joueurs):
     # Mise-en-place
+    joueurs.sort(key=lambda j: j.id)
     jeu = constituer_jeu()
     pioche = jeu[3 * len(joueurs):]
     marché = list()
@@ -277,7 +366,8 @@ def jouer_manche(joueurs):
     while len(pioche) > 0:
         j = joueurs[actif]
 
-        logging.info("Tour de {}".format(j.nom))
+        logging.info(
+            "Tour de {} - {} carte(s) dans la pioche".format(j.nom, len(pioche)))
 
         # Affichage des portefeuilles
         afficher_portefeuilles(joueurs)
@@ -340,9 +430,9 @@ def lancer_partie(nb_joueurs, humain, nb_manches):
     joueurs = list()
     for i in range(nb_joueurs):
         if humain == i + 1:
-            joueurs.append(Humain("humain"))
+            joueurs.append(Humain("humain", i))
         else:
-            joueurs.append(Robot("Robot n°{}".format(i)))
+            joueurs.append(Robot("Robot n°{}".format(i), i))
 
     # Manches
     for i in range(nb_manches):
@@ -355,7 +445,6 @@ def lancer_partie(nb_joueurs, humain, nb_manches):
 
 
 if __name__ == "__main__":
-    random.seed(1977)
     logging.basicConfig(level=logging.DEBUG)
 
-    lancer_partie(4, 0, 1)
+    lancer_partie(7, 1, 4)
