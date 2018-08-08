@@ -174,45 +174,50 @@ class Humain(Joueur):
 
         # Affichage du marché
         self.marché.sort(key=lambda a: (a.entreprise, -a.valeur))
-        logging.info("Marché :\n" + self.afficher_marché())
 
         logging.info(self.afficher_main())
 
-        # Choix de l'action
+        # Constitution de la liste des options pour le choix de la prise de
+        # carte
+        options = list()
+
         marché = self._marché_réel()
         peut_piocher = (self.richesse >= len(marché))
         peut_prendre = (len(marché) > 0)
 
-        piocher = False
-        if peut_piocher and peut_prendre:
-            while True:
-                x = input("Que voulez vous faire ? 1) Piocher 2) Prendre ")
-                if x.isdigit() and int(x) in [1, 2]:
-                    piocher = (int(x) == 1)
-                    break
-        elif peut_piocher:
-            piocher = True
+        if peut_piocher:
+            options.append("Piocher")
 
-        action = None
+        if peut_prendre:
+            for a in self.marché:
+                titre = "Récupérer {} et {}€".format(
+                    a.entreprise.name, a.valeur)
+                if a in marché:
+                    options.append(titre)
+                else:
+                    options.append((titre, False))
+
+        choix = choisir_option(options)
+        piocher = False
+        if peut_piocher:
+            if choix == 0:
+                piocher = True
+            else:
+                choix -= 1
+
         if piocher:
             for a in marché:
                 a.rétribuer()
             self.richesse -= len(marché)
             action = self._piocher()
         else:
-            while True:
-                x = input("Quelle carte ? ")
-                if x.isdigit():
-                    x = int(x)
-                    if 0 <= x < len(self.marché) and self.marché[x] in marché:
-                        action = self.marché[x]
-                        del self.marché[x]
-                        if action.valeur > 0:
-                            logging.info(
-                                "Vous récupérez {}€".format(action.valeur))
-                        self.richesse += action.valeur
-                        action.purger_dividendes()
-                        break
+            action = marché[choix]
+            self.marché.remove(action)
+            if action.valeur > 0:
+                logging.info("Vous récupérez {}€".format(action.valeur))
+                self.richesse += action.valeur
+                action.purger_dividendes()
+
         logging.info(
             "Vous récupérez une action {!r}".format(action.entreprise.name))
         self.main.append(action)
@@ -222,21 +227,20 @@ class Humain(Joueur):
         logging.info(self.afficher_main())
 
         vendre = False
-        while True:
-            x = input(
-                "Que voulez-vous faire ? 1) Intégrer au portefeuille 2) Revendre ")
-            if x.isdigit() and int(x) in [1, 2]:
-                vendre = (int(x) == 2)
-                break
-        while True:
-            x = input("Quelle carte ? ")
-            if x.isdigit():
-                x = int(x)
-                if (0 <= x < len(self.main) and
-                        not (vendre and not piocher and self.main[x] is action)):
-                    action = self.main[x]
-                    del self.main[x]
-                    break
+        options = ["Intégrer au portefeuille", "Revendre"]
+        choix = choisir_option(options, 1)
+        vendre = (choix == 1)
+
+        options = list()
+        for e in Entreprise:
+            actions = [a for a in self.main if a.entreprise is e]
+            if len(actions) > 0:
+                options.append(e.name)
+        choix = choisir_option(options, 1)
+        e = Entreprise[options[choix]]
+        actions = [a for a in self.main if a.entreprise is e]
+        action = actions[0]
+        self.main.remove(action)
 
         if vendre:
             self.marché.append(action)
@@ -301,6 +305,56 @@ class Robot(Joueur):
                 action2 = random.sample(self.main, 1)[0]
                 self.main.remove(action2)
                 self._mettre_au_marché(action2)
+
+
+def choisir_option(options, base=0):
+    """Interroge l'utilisateur sur un choix parmi plusieurs options
+
+    Toutes les options ne sont pas sélectionnables. C'est pourquoi une option
+    est soit :
+    - une paire (`choix`, `est_sélectionnable`)
+    - un `choix`
+
+    `base` sert à la fois à l'affichage et à la sélection. Néanmoins, c'est
+    bien l'indice d'une option sélectionnable qui est renvoyé.
+    """
+    n = base
+    nb_possibles = 0
+    clefs = dict()
+
+    # Constitution du menu
+    menu = list()
+    for i, c in enumerate(options):
+        possible = True
+        if isinstance(c, tuple):
+            possible = c[1]
+            c = c[0]
+        if possible:
+            nb_possibles += 1
+            clefs[n] = i
+            chaîne = "{}) {}".format(n, c)
+            n += 1
+        else:
+            chaîne = "x. {}".format(c)
+        menu.append(chaîne)
+
+    # Récupération du choix de l'utilisateur
+    print("\n".join(menu))
+    if nb_possibles == 1:
+        k, v = next(iter(clefs.items()))
+        print("Votre choix ? {}".format(k))
+        retour = v
+    else:
+        while True:
+            choix = input("Votre choix ? ")
+            if choix.isdigit():
+                choix = int(choix)
+                if choix in clefs:
+                    retour = clefs[choix]
+                    break
+
+    # Renvoi de l'option correspondante
+    return retour
 
 
 def constituer_jeu():
@@ -429,7 +483,7 @@ def lancer_partie(nb_joueurs, humain, nb_manches):
     # Création des joueurs
     joueurs = list()
     for i in range(nb_joueurs):
-        if humain == i + 1:
+        if humain == i:
             joueurs.append(Humain("humain", i))
         else:
             joueurs.append(Robot("Robot n°{}".format(i), i))
@@ -447,4 +501,6 @@ def lancer_partie(nb_joueurs, humain, nb_manches):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
 
-    lancer_partie(7, 1, 4)
+    NB_JOUEURS = random.randint(3, 7)
+    ID_JOUEUR = random.randrange(NB_JOUEURS)
+    lancer_partie(NB_JOUEURS, ID_JOUEUR, 4)
