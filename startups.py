@@ -211,7 +211,7 @@ class Humain(Joueur):
             self.richesse -= len(marché)
             action = self._piocher()
         else:
-            action = marché[choix]
+            action = self.marché[choix]
             self.marché.remove(action)
             if action.valeur > 0:
                 logging.info("Vous récupérez {}€".format(action.valeur))
@@ -235,7 +235,10 @@ class Humain(Joueur):
         for e in Entreprise:
             actions = [a for a in self.main if a.entreprise is e]
             if len(actions) > 0:
-                options.append(e.name)
+                if not piocher and vendre and action.entreprise is e:
+                    options.append((e.name, False))
+                else:
+                    options.append(e.name)
         choix = choisir_option(options, 1)
         e = Entreprise[options[choix]]
         actions = [a for a in self.main if a.entreprise is e]
@@ -251,8 +254,6 @@ class Humain(Joueur):
 class Robot(Joueur):
 
     def jouer(self):
-        logging.debug(self.afficher_main())
-
         marché = self._marché_réel()
         peut_piocher = (self.richesse >= len(marché))
         peut_prendre = (len(marché) > 0)
@@ -433,7 +434,9 @@ def jouer_manche(joueurs):
         for e in Entreprise:
             n = [j.actions[e] for j in joueurs]
             m = max(n)
-            if n.count(m) == 1 and n[actif] == m:
+            if (n.count(m) == 1 and
+                    n[actif] == m and
+                    e not in j.majorités):
                 for k in joueurs:
                     if k.est_majoritaire(e):
                         k.perd_majorité(e)
@@ -449,7 +452,7 @@ def jouer_manche(joueurs):
     for j in joueurs:
         j.actions.update([a.entreprise for a in j.main])
         j.main.clear()
-    logging.info(afficher_portefeuilles(joueurs))
+    afficher_portefeuilles(joueurs)
 
     # Paiement des dividendes
     for e in Entreprise:
@@ -463,11 +466,11 @@ def jouer_manche(joueurs):
             total = 0
             for j in joueurs:
                 if j is not vainqueur and e in j.actions:
-                    logging.info("{} paie {}".format(j.nom, m - j.actions[e]))
+                    logging.info("{} paie {}€".format(j.nom, m - j.actions[e]))
                     j.richesse -= m - j.actions[e]
                     total += m - j.actions[e]
             total *= 3
-            logging.info("{} reçoit {}".format(vainqueur.nom, total))
+            logging.info("{} reçoit {}€".format(vainqueur.nom, total))
             vainqueur.richesse += total
 
     # Attribution des points de victoire
