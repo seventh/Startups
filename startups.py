@@ -184,9 +184,11 @@ class Humain(Joueur):
         marché = self._marché_réel()
         peut_piocher = (self.richesse >= len(marché))
         peut_prendre = (len(marché) > 0)
+        base = 1
 
         if peut_piocher:
             options.append("Piocher")
+            base = 0
 
         if peut_prendre:
             for a in self.marché:
@@ -197,7 +199,7 @@ class Humain(Joueur):
                 else:
                     options.append((titre, False))
 
-        choix = choisir_option(options)
+        choix = choisir_option(options, base)
         piocher = False
         if peut_piocher:
             if choix == 0:
@@ -409,7 +411,6 @@ def afficher_portefeuilles(joueurs):
 
 def jouer_manche(joueurs):
     # Mise-en-place
-    joueurs.sort(key=lambda j: j.id)
     jeu = constituer_jeu()
     pioche = jeu[3 * len(joueurs):]
     marché = list()
@@ -425,7 +426,8 @@ def jouer_manche(joueurs):
             "Tour de {} - {} carte(s) dans la pioche".format(j.nom, len(pioche)))
 
         # Affichage des portefeuilles
-        afficher_portefeuilles(joueurs)
+        if isinstance(j, Humain):
+            afficher_portefeuilles(joueurs)
 
         # Tour à proprement parler
         j.jouer()
@@ -452,6 +454,24 @@ def jouer_manche(joueurs):
     for j in joueurs:
         j.actions.update([a.entreprise for a in j.main])
         j.main.clear()
+
+    # Détermination des majorités finales
+    for e in Entreprise:
+        n = [j.actions[e] for j in joueurs]
+        m = max(n)
+        if n.count(m) == 1:
+            i = n.index(m)
+            j = joueurs[i]
+            if e not in j.majorités:
+                for k in joueurs:
+                    if k.est_majoritaire(e):
+                        k.perd_majorité(e)
+                j.devient_majoritaire(e)
+        else:
+            for k in joueurs:
+                if k.est_majoritaire(e):
+                    k.perd_majorité(e)
+
     afficher_portefeuilles(joueurs)
 
     # Paiement des dividendes
@@ -489,11 +509,20 @@ def lancer_partie(nb_joueurs, humain, nb_manches):
         if humain == i:
             joueurs.append(Humain("humain", i))
         else:
-            joueurs.append(Robot("Robot n°{}".format(i), i))
+            joueurs.append(Robot("R_{}".format(i), i))
 
     # Manches
     for i in range(nb_manches):
+        logging.info("Manche n°{}".format(i + 1))
+
         jouer_manche(joueurs)
+
+        # Le dernier joueur de la manche commencera la manche suivante… mais
+        # on conserve évidemment l'ordre du tour !
+        dernier = joueurs[-1]
+        joueurs.sort(key=lambda j: j.id)
+        i_dernier = joueurs.index(dernier)
+        joueurs[:] = joueurs[i_dernier:] + joueurs[:i_dernier]
 
     # Affichage du vainqueur
     joueurs.sort(key=lambda j: j.points, reverse=True)
