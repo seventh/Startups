@@ -228,21 +228,20 @@ class Humain(Joueur):
         # Choix du jeu
         logging.info(self.afficher_main())
 
+        entreprises = sorted(set([a.entreprise for a in self.main]))
+
         vendre = False
-        options = ["Intégrer au portefeuille", "Revendre"]
+        options = ["Intégrer au portefeuille",
+                   ("Revendre", piocher or len(entreprises) != 1)]
         choix = choisir_option(options, 1)
         vendre = (choix == 1)
 
         options = list()
-        for e in Entreprise:
-            actions = [a for a in self.main if a.entreprise is e]
-            if len(actions) > 0:
-                if not piocher and vendre and action.entreprise is e:
-                    options.append((e.name, False))
-                else:
-                    options.append(e.name)
+        for e in entreprises:
+            options.append(
+                (e.name, piocher or not vendre or action.entreprise is not e))
         choix = choisir_option(options, 1)
-        e = Entreprise[options[choix]]
+        e = entreprises[choix]
         actions = [a for a in self.main if a.entreprise is e]
         action = actions[0]
         self.main.remove(action)

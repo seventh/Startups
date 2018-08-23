@@ -1,0 +1,6 @@
+# Startups
+
+Jeu de société publié par «Oink!», ce programme en offre une simulation
+rudimentaire contre des adversaires malins comme des parpaings.
+
+Le nombre d'adversaire est sélectionné aléatoirement.
