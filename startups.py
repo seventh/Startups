@@ -186,18 +186,23 @@ class Humain(Joueur):
         peut_prendre = (len(marché) > 0)
         base = 1
 
-        if peut_piocher:
-            options.append("Piocher")
-            base = 0
-
+        nb_possibles = 0
         if peut_prendre:
             for a in self.marché:
                 titre = "Récupérer {} et {}€".format(
                     a.entreprise.name, a.valeur)
                 if a in marché:
                     options.append(titre)
+                    nb_possibles += 1
                 else:
                     options.append((titre, False))
+
+        if peut_piocher:
+            texte = "Piocher"
+            if nb_possibles != 0:
+                texte += " pour {}€".format(nb_possibles)
+            options.insert(0, texte)
+            base = 0
 
         choix = choisir_option(options, base)
         piocher = False
