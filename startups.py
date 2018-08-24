@@ -266,12 +266,19 @@ class Robot(Joueur):
 
         # Le jeu est ainsi fait qu'on a toujours une option de jeu (tout de
         # même !)
-        piocher = False
-        if peut_piocher:
-            if peut_prendre:
+        cartes_payantes = [a for a in marché if a.valeur != 0]
+        entreprises = set([a.entreprise for a in marché])
+        intéressantes = entreprises.intersection(self.actions.keys())
+
+        piocher = True
+        if peut_prendre:
+            if (len(intéressantes) != 0 or
+                    len(cartes_payantes) != 0):
+                piocher = False
+            elif peut_piocher:
                 piocher = (random.randrange(2) == 1)
             else:
-                piocher = True
+                piocher = False
 
         if piocher:
             logging.info("{} pioche".format(self.nom))
@@ -282,7 +289,20 @@ class Robot(Joueur):
             action = self._piocher()
         else:
             # On prend une carte au marché
-            action = random.sample(marché, 1)[0]
+            if len(intéressantes) != 0:
+                # … une carte dont on fait déjà la famille
+                cartes_famille = [
+                    a for a in marché if a.entreprise in intéressantes]
+                cartes_famille.sort(key=lambda a: -a.valeur)
+                action = cartes_famille[0]
+            elif len(cartes_payantes) != 0:
+                # … une carte qui rapporte des sous
+                cartes_payantes.sort(key=lambda a: -a.valeur)
+                action = cartes_payantes[0]
+            else:
+                # … une carte au hasard
+                action = random.sample(marché, 1)[0]
+
             logging.info("{} récupère une action {!r} au marché".format(
                 self.nom, action.entreprise.name))
             self.marché.remove(action)
