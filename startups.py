@@ -309,29 +309,31 @@ class Robot(Joueur):
             self.richesse += action.valeur
             action.purger_dividendes()
 
-        # …on ajoutera l'action récupérée un peu plus tard à notre main…
+        # …on ajoute l'action récupérée à notre main…
+        self.main.append(action)
 
         # Il faut maintenant soit jouer une carte, soit en remettre une au
         # marché
-        if random.randrange(2) == 1:
+
+        # Si on revend une carte, on va éviter de se séparer d'une entreprise
+        # dans laquelle on a déjà investit publiquement
+        revendables = set(
+            [a.entreprise for a in self.main if a.entreprise not in self.actions.keys()])
+        if not piocher:
+            revendables.discard(action.entreprise)
+
+        if (len(revendables) == 0 or
+                random.randrange(2) == 1):
             # On joue une carte
-            self.main.append(action)
             action = random.sample(self.main, 1)[0]
             self.main.remove(action)
             self._augmenter_portefeuille(action)
         else:
-            # On restitue une carte au marché… sauf celle que l'on y a prise le
-            # cas échéant
-            if not piocher:
-                action2 = random.sample(self.main, 1)[0]
-                self.main.remove(action2)
-                self._mettre_au_marché(action2)
-                self.main.append(action)
-            else:
-                self.main.append(action)
-                action2 = random.sample(self.main, 1)[0]
-                self.main.remove(action2)
-                self._mettre_au_marché(action2)
+            # On restitue une carte au marché
+            actions = [a for a in self.main if a.entreprise in revendables]
+            action = random.sample(actions, 1)[0]
+            self.main.remove(action)
+            self._mettre_au_marché(action)
 
 
 def choisir_option(options, base=0):
