@@ -170,8 +170,6 @@ class Joueur:
 class Humain(Joueur):
 
     def jouer(self):
-        logging.info("Vous avez {}€".format(self.richesse))
-
         # Affichage du marché
         self.marché.sort(key=lambda a: (a.entreprise, -a.valeur))
 
@@ -183,19 +181,17 @@ class Humain(Joueur):
 
         marché = self._marché_réel()
         peut_piocher = (self.richesse >= len(marché))
-        peut_prendre = (len(marché) > 0)
         base = 1
 
         nb_possibles = 0
-        if peut_prendre:
-            for a in self.marché:
-                titre = "Récupérer {} et {}€".format(
-                    a.entreprise.name, a.valeur)
-                if a in marché:
-                    options.append(titre)
-                    nb_possibles += 1
-                else:
-                    options.append((titre, False))
+        for a in self.marché:
+            titre = "Récupérer {} et {}€".format(
+                a.entreprise.name, a.valeur)
+            if a in marché:
+                options.append(titre)
+                nb_possibles += 1
+            else:
+                options.append((titre, False))
 
         if peut_piocher:
             texte = "Piocher"
@@ -404,14 +400,18 @@ def afficher_portefeuilles(joueurs):
     """
     largeurs = list()
     largeurs.append(max([len(e.name) for e in Entreprise]))
-    largeurs.extend([len(j.nom) for j in joueurs])
+    largeurs.extend([max(len(j.nom), len("{} €".format(j.richesse)))
+                     for j in joueurs])
 
     lignes = list()
     lignes.append("")
 
-    affs = ["{{:{}}}".format(l) for l in largeurs]
+    affs = ["{{:^{}}}".format(l) for l in largeurs]
     ligne = " | ".join(map(lambda x: x[0].format(
         x[1]), zip(affs, [""] + [j.nom for j in joueurs])))
+    lignes.append(ligne)
+    ligne = " | ".join(map(lambda x: x[0].format(
+        x[1]), zip(affs, [""] + ["{} €".format(j.richesse) for j in joueurs])))
     lignes.append(ligne)
 
     affs = ["{{:-<{}}}".format(l) for l in largeurs]
