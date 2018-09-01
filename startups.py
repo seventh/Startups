@@ -19,21 +19,23 @@ class Entreprise(enum.IntEnum):
 
 class Action:
 
-    def __init__(self, entreprise):
+    def __init__(self, entreprise, ordre):
         self._entreprise = entreprise
+        self._ordre = ordre
         self._valeur = 0
 
     def __repr__(self):
-        retour = "{}[0x{:x}({!r}".format(
-            self.__class__.__name__, id(self), self._entreprise.name)
+        retour = "{}[0x{:x}({!r} n°{}".format(
+            self.__class__.__name__, id(self), self._entreprise.name,
+            self._ordre)
         if self._valeur != 0:
             retour += " → {}€".format(self._valeur)
         retour += ")"
         return retour
 
     def __str__(self):
-        retour = "{}({!r}".format(
-            self.__class__.__name__, self._entreprise.name)
+        retour = "{}({!r} n°{}".format(
+            self.__class__.__name__, self._entreprise.name, self._ordre)
         if self._valeur != 0:
             retour += " → {}€".format(self._valeur)
         retour += ")"
@@ -44,6 +46,12 @@ class Action:
         """Entreprise dont l'Action est une part du capital
         """
         return self._entreprise
+
+    @property
+    def ordre(self):
+        """Numéro de série de l'Action
+        """
+        return self._ordre
 
     @property
     def valeur(self):
@@ -141,6 +149,9 @@ class Joueur:
         """
         logging.info("{} ajoute une action {!r} à son portefeuille".format(
             self.nom, action.entreprise.name))
+        logging.debug(
+            "{} ajoute l'action {} à son portefeuille".format(
+                self.nom, action))
         self.actions.update([action.entreprise])
 
     def _mettre_au_marché(self, action):
@@ -148,6 +159,7 @@ class Joueur:
         """
         logging.info("{} reverse une action {!r} au marché".format(
             self.nom, action.entreprise.name))
+        logging.debug("{} reverse {} au marché".format(self.nom, action))
         self.marché.append(action)
 
     def _marché_réel(self):
@@ -223,6 +235,7 @@ class Humain(Joueur):
 
         logging.info(
             "Vous récupérez une action {!r}".format(action.entreprise.name))
+        logging.debug(action)
         self.main.append(action)
         self.main.sort(key=lambda a: a.entreprise)
 
@@ -248,9 +261,9 @@ class Humain(Joueur):
         self.main.remove(action)
 
         if vendre:
-            self.marché.append(action)
+            self._mettre_au_marché(action)
         else:
-            self.actions.update([action.entreprise])
+            self._augmenter_portefeuille(action)
 
 
 class Robot(Joueur):
@@ -283,6 +296,7 @@ class Robot(Joueur):
                 m.rétribuer()
             self.richesse -= len(marché)
             action = self._piocher()
+            logging.debug("{} pioche l'action {}".format(self.nom, action))
         else:
             # On prend une carte au marché
             if len(intéressantes) != 0:
@@ -301,6 +315,8 @@ class Robot(Joueur):
 
             logging.info("{} récupère une action {!r} au marché".format(
                 self.nom, action.entreprise.name))
+            logging.debug(
+                "{} récupère l'action {} au marché".format(self.nom, action))
             self.marché.remove(action)
             self.richesse += action.valeur
             action.purger_dividendes()
@@ -314,7 +330,8 @@ class Robot(Joueur):
         # Si on revend une carte, on va éviter de se séparer d'une entreprise
         # dans laquelle on a déjà investit publiquement
         revendables = set(
-            [a.entreprise for a in self.main if a.entreprise not in self.actions.keys()])
+            [a.entreprise for a in self.main
+             if a.entreprise not in self.actions.keys()])
         if not piocher:
             revendables.discard(action.entreprise)
 
@@ -387,10 +404,11 @@ def constituer_jeu():
 
     for e in Entreprise:
         for i in range(e.value):
-            retour.append(Action(e))
+            retour.append(Action(e, i + 1))
 
-    retour = random.sample(retour, len(retour) - 5)
     random.shuffle(retour)
+    logging.debug("Cartes écartées : {}".format([str(a) for a in retour[-5:]]))
+    retour[:] = retour[:-5]
 
     return retour
 
@@ -449,14 +467,17 @@ def jouer_manche(joueurs):
         j = joueurs[actif]
 
         logging.info(
-            "Tour de {} - {} carte(s) dans la pioche".format(j.nom, len(pioche)))
+            "Tour de {} - {} carte(s) dans la pioche".format(
+                j.nom, len(pioche)))
 
         # Affichage des portefeuilles
         if isinstance(j, Humain):
             afficher_portefeuilles(joueurs)
 
         # Tour à proprement parler
+        logging.debug([str(a) for a in j.main])
         j.jouer()
+        logging.debug([str(a) for a in j.main])
 
         # Vérification des majorités
         for e in Entreprise:
@@ -480,6 +501,7 @@ def jouer_manche(joueurs):
     for j in joueurs:
         j.actions.update([a.entreprise for a in j.main])
         j.main.clear()
+    logging.debug("Marché : {}".format([str(a) for a in marché]))
 
     # Détermination des majorités finales
     for e in Entreprise:
@@ -557,7 +579,7 @@ def lancer_partie(nb_joueurs, humain, nb_manches):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
 
     NB_JOUEURS = random.randint(3, 7)
     ID_JOUEUR = random.randrange(NB_JOUEURS)
